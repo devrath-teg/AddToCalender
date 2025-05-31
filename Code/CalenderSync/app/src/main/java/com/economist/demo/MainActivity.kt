@@ -4,6 +4,7 @@ import android.Manifest
 import android.accounts.AccountManager
 import android.app.Activity
 import android.content.ContentResolver
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.content.ContextWrapper
@@ -84,6 +85,16 @@ fun CalendarDirectInsertScreen() {
             }
         ) {
             Text("Add Event to Google Events Calendar")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = {
+                deleteEventFromCalendar(context)
+            }
+        ) {
+            Text("Delete Inserted Calendar Events")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -304,6 +315,61 @@ fun queryInsertedEvents(context: Context) {
         Log.d("EventQuery", "No matching event found.")
     }
 }
+
+fun deleteEventFromCalendar(context: Context) {
+    val contentResolver = context.contentResolver
+
+    val beginTime = Calendar.getInstance().timeInMillis
+    val endTime = Calendar.getInstance().apply {
+        add(Calendar.DAY_OF_YEAR, 7)
+    }.timeInMillis
+
+    // First query matching events
+    val projection = arrayOf(
+        CalendarContract.Events._ID,
+        CalendarContract.Events.TITLE
+    )
+
+    val selection = "(${CalendarContract.Events.DTSTART} >= ?) AND " +
+            "(${CalendarContract.Events.DTEND} <= ?) AND " +
+            "(${CalendarContract.Events.TITLE} = ?)"
+
+    val selectionArgs = arrayOf(
+        beginTime.toString(),
+        endTime.toString(),
+        "My Google Calendar Event" // must match TITLE used in insert!
+    )
+
+    val cursor = contentResolver.query(
+        CalendarContract.Events.CONTENT_URI,
+        projection,
+        selection,
+        selectionArgs,
+        null
+    )
+
+    if (cursor != null && cursor.moveToFirst()) {
+        do {
+            val eventId = cursor.getLong(0)
+
+            // Delete this event
+            val deleteUri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
+            val rows = contentResolver.delete(deleteUri, null, null)
+
+            Log.d("EventDelete", "Deleted event ID=$eventId, rows=$rows")
+
+        } while (cursor.moveToNext())
+
+        cursor.close()
+
+        Toast.makeText(context, "Matching calendar events deleted.", Toast.LENGTH_SHORT).show()
+
+    } else {
+        Log.d("EventDelete", "No matching events to delete.")
+        Toast.makeText(context, "No matching calendar events found.", Toast.LENGTH_SHORT).show()
+    }
+}
+
 
 
 
